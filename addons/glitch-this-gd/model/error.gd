@@ -1,11 +1,12 @@
 extends Reference
 
 enum Code {
-	NONE = 200,
+	NONE = 0,
 
 	#region General
 
-	UNRECOGNIZED_FILE_TYPE
+	UNRECOGNIZED_FILE_TYPE,
+	FILE_NOT_FOUND,
 
 	#endregion
 	
@@ -13,6 +14,7 @@ enum Code {
 	
 	GLITCH_THIS_NOT_SUPPORTED,
 	GLITCH_THIS_UNABLE_TO_LOAD,
+	GLITCH_THIS_UNABLE_TO_CREATE_FROM_DATA
 	
 	#endregion
 }

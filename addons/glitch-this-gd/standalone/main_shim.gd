@@ -12,6 +12,7 @@ var main: Control
 func _ready() -> void:
 	main = MAIN.instance()
 	main.plugin = DUMMY_PLUGIN.new()
+	main.theme = load("res://addons/glitch-this-gd/standalone/main.theme")
 	add_child(main)
 
 ###############################################################################

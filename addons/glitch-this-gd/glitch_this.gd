@@ -2,6 +2,7 @@ extends Reference
 
 const Result = preload("res://addons/glitch-this-gd/model/result.gd")
 const Error = preload("res://addons/glitch-this-gd/model/error.gd")
+const Channels = preload("res://addons/glitch-this-gd/model/channels.gd")
 
 enum ImageMode {
 	NONE = 0,
@@ -22,8 +23,11 @@ var img_size := Vector2.ZERO
 var img_mode: int = ImageMode.UNKNOWN
 
 # Creating 3D arrays for pixel data
-var input_arr: PoolByteArray
-var output_arr: PoolByteArray
+#var input_arr: PoolByteArray
+#var output_arr: PoolByteArray
+
+var input_channels: Channels
+var output_channels: Channels
 
 # Getting PATH of temp folders
 var gif_dir_path: String
@@ -48,8 +52,7 @@ func _init() -> void:
 ###############################################################################
 
 func _is_gif(img) -> bool:
-	logger.error("_is_gif not yet implemented")
-	
+	# TODO stub
 	return false
 
 func _reset_rng_seed(offset: int = 0) -> void:
@@ -148,31 +151,214 @@ func _get_glitched_image(glitch_amount: float, color_offset: int, scan_lines: bo
 	if scan_lines:
 		_add_scan_lines()
 
-	var image := Image.new()
-	if image.create_from_data(img_size.x, img_size.y, false, Image.FORMAT_RGBA8, output_arr) != OK:
-		return Result.new(
-			null,
-			Error.new(
-				Error.Code.GLITCH_THIS_UNABLE_TO_CREATE_FROM_DATA,
-				"Error when creating glitched image"))
-
-	return Result.new(image)
+	return Result.new(output_channels.reconstruct_image())
 
 func _add_scan_lines() -> void:
-	# TODO stub
-	pass
+	"""
+	Make every other row have only black pixels
+	Only the R, G, and B channels are assigned 0 values
+	Alpha is left untouched (if preset)
+
+	We basically manually slice here in the Godot implementation, since we need to change the values
+	at the specified slice steps, not just pull the values
+	"""
+	for i in output_channels.r.size():
+		if i % 2 == 0:
+			output_channels.r[i] = 0.0
+
+	for i in output_channels.g.size():
+		output_channels.g[i] = 0.0
+
+	for i in output_channels.b.size():
+		if i >= 3:
+			break
+
+		output_channels.b[i] = 0.0
 
 func _glitch_left(offset: int) -> void:
-	# TODO stub
-	pass
+	"""
+	Grabs a rectangle from the input and shifts it leftwards
+	Any lost pixel data is wrapped back to the right
+	Rectangle's Width and Height are determined from offset
+
+	The original uses fancy Python slice manipulation. We convert by channel instead
+	"""
+	# Setting up values that will determine the rectangle height
+	var start_y: int = rng.randi_range(0, img_size.y)
+	var chunk_height: int = rng.randi_range(1, int(img_size.y / 4))
+	chunk_height = min(chunk_height, img_size.y - start_y)
+	var stop_y: int = start_y + chunk_height
+
+	# For copy
+	var start_x: int = offset
+	# For paste
+	var stop_x: int = img_size.x - start_x
+
+	# var left_chunk_r := channels.r.slice(start_y, stop_y)
+	var left_chunk_g := input_channels.g.slice(0, start_x)
+
+	# var wrap_chunk_r := channels.r.slice(start_y, stop_y)
+	var wrap_chunk_g := input_channels.g.slice(start_x, input_channels.g.size())
+
+
+	# TODO I don't think we need to process the R channel
+	# It looks like this is only needed in the Python implementation
+	# so that they can instead set the G channel using slice notation
+
+	var counter: int = 0
+	# for i in range(start_y, stop_y):
+	# 	channels.r[i] = left_chunk_r[counter]
+	# 	counter += 1
+	
+	# counter = 0
+	for i in range(0, stop_x):
+		if counter >= left_chunk_g.size():
+			break
+		output_channels.g[i] = left_chunk_g[counter]
+		counter += 1
+	counter = 0
+
+	# counter = 0
+	# for i in range(start_y, stop_y):
+	# 	channels.r[i] = wrap_chunk_r[counter]
+	# 	counter += 1
+
+	for i in range(stop_x, output_channels.g.size()):
+		if counter >= wrap_chunk_g.size():
+			break
+		output_channels.g[i] = wrap_chunk_g[counter]
+		counter += 1
+	counter = 0
 
 func _glitch_right(offset: int) -> void:
-	# TODO stub
-	pass
+	"""
+	Grabs a rectangle from the input and shifts it rightwards
+	Any lost pixel data is wrapped back to the left
+	Rectangle's Width and Height are determined from offset
+	"""
+	# Setting up values that will determine the rectangle height
+	var start_y: int = rng.randi_range(0, img_size.y)
+	var chunk_height: int = rng.randi_range(1, int(img_size.y / 4))
+	chunk_height = min(chunk_height, img_size.y - start_y)
+	var stop_y: int = start_y + chunk_height
+
+	# For copy
+	var stop_x: int = img_size.x - offset
+	# For paste
+	var start_x: int = offset
+
+	# var right_chunk_r := channels.r.slice(start_y, stop_y)
+	var right_chunk_g := input_channels.g.slice(0, stop_x)
+
+	# var wrap_chunk_r := channels.r.slice(start_y, stop_y)
+	var wrap_chunk_g := input_channels.g.slice(stop_x, input_channels.g.size())
+
+	# TODO I don't think we need to process the R channel
+	# It looks like this is only needed in the Python implementation
+	# so that they can instead set the G channel using slice notation
+
+	var counter: int = 0
+	# for i in range(start_y, stop_y):
+	# 	channels.r[i] = right_chunk_r[counter]
+	# 	counter += 1
+	
+	# counter = 0
+	for i in range(start_x, output_channels.g.size()):
+		if counter >= right_chunk_g.size():
+			break
+		output_channels.g[i] = right_chunk_g[counter]
+		counter += 1
+	counter = 0
+
+	# counter = 0
+	# for i in range(start_y, stop_y):
+	# 	channels.r[i] = wrap_chunk_r[counter]
+	# 	counter += 1
+
+	for i in range(0, start_x):
+		if counter >= wrap_chunk_g.size():
+			break
+		output_channels.g[i] = wrap_chunk_g[counter]
+		counter += 1
+	counter = 0
 
 func _color_offset(offset_x: int, offset_y: int, channel_index: int) -> void:
-	# TODO stub
-	pass
+	"""
+	Takes the given channel's color value from the image starting from (0, 0)
+	and puts it in the same channel's slot in the output starting from (offset_y, offset_x)
+
+	Once again, we need to manually manipulate the channels instead of using Python slicing
+	"""
+	# Make sure offset_x isn't negative in the actual algo
+	offset_x = offset_x if offset_x >= 0 else img_size.x + offset_x
+	offset_y = offset_y if offset_y >= 0 else img_size.y + offset_y
+	
+	# Assign values from 0th row of input to offset_y'th
+	# row of output
+	# If output's column run out before input's do, wrap the remaining values around
+	
+	# TODO it looks like the B channel is always just copied from the input
+	# Maybe it can be taken out?
+	
+	# Initialize all our helper variables for emulating fancy Python slicing
+	var counter: int = 0
+	var r_slice := []
+	var g_slice := []
+	var b_slice := []
+	
+	output_channels.r[offset_y] = input_channels.r[0]
+	
+	g_slice = input_channels.g.slice(0, img_size.x - offset_x)
+	for i in range(offset_x, output_channels.g.size()):
+		if counter >= g_slice.size():
+			break
+		output_channels.g[i] = g_slice[counter]
+		counter += 1
+	counter = 0
+	
+	output_channels.b[channel_index] = input_channels.b[channel_index]
+	
+	# Process wrap
+	
+	output_channels.r[offset_y] = input_channels.r[0]
+	
+	g_slice = input_channels.g.slice(img_size.x - offset_x, input_channels.g.size())
+	for i in range(0, offset_x):
+		if counter >= g_slice.size():
+			break
+		output_channels.g[i] = g_slice[counter]
+		counter += 1
+	counter = 0
+	
+	output_channels.b[channel_index] = input_channels.b[channel_index]
+	
+	# Continue afterwards till end of output
+	# Make sure the width and height match for both slices
+	r_slice = input_channels.r.slice(1, img_size.y - offset_y)
+	for i in range(offset_y + 1, output_channels.r.size()):
+		if counter >= r_slice.size():
+			break
+		output_channels.r[i] = r_slice[counter]
+		counter += 1
+	counter = 0
+	
+	# The G channel is just a straight copy, so skip processing it
+	
+	output_channels.b[channel_index] = input_channels.b[channel_index]
+	
+	# Restart from 0th row of output and go until the offset_y'th row
+	# This will assign the remaining values in input to output
+	r_slice = input_channels.r.slice(img_size.y - offset_y, input_channels.r.size())
+	for i in range(0, offset_y):
+		if counter >= r_slice.size():
+			break
+		output_channels.r[i] = r_slice[counter]
+		counter += 1
+	counter = 0
+	
+	# The G channel is just a straight copy, so skip processing it
+	
+	output_channels.b[channel_index] = input_channels.b[channel_index]
 
 #endregion
 
@@ -230,15 +416,13 @@ func glitch_image(
 	img_size = img.get_size()
 	img_mode = img.get_format()
 	
-	# TODO we need to manually construct the 3D array
 	# Assigning the 3D arrays with pixel data
-	input_arr = img.get_data()
-	
-	output_arr = []
-	output_arr.resize(input_arr.size())
+	# Technically we're using a different approach in Godot
+	input_channels = Channels.new(img)
+	output_channels = Channels.new(img)
 	
 	if not gif:
-		pass
+		return _get_glitched_image(glitch_amount, color_offset, scan_lines)
 	
 	return Result.new(null)
 

@@ -28,18 +28,13 @@ func _enter_tree():
 		printerr("Unable to get editor file system\nThis is 100% a bug\nPlease disable the plugin")
 	
 	file_system.connect("multi_selected", self, "_on_file_system_multi_selected")
-	
-	for c0 in get_editor_interface().get_file_system_dock().get_children():
-		if c0 is VSplitContainer:
-			for c1 in c0.get_children():
-				if c1 is Tree:
-					file_system = c1
-					file_system.connect("multi_selected", self, "_on_file_system_multi_selected")
 
 func _exit_tree():
 	if main != null:
 		remove_control_from_bottom_panel(main)
 		main.queue_free()
+	if file_system != null:
+		file_system.disconnect("multi_selected", self, "_on_file_system_multi_selected")
 
 func enable_plugin():
 	make_bottom_panel_item_visible(main)
